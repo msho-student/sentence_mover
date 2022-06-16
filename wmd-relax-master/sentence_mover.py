@@ -54,8 +54,58 @@ class SentenceMoverSim():
 		return sim
 	
 	def score_batch(self, refs, hyps):
-		# STUB: finish me
-		return [0.0]
+		flat = []
+		r_ids, h_ids = [], []
+		sent_id = 0
+		scores = []
+
+		# flatten sentences for pipeline input
+		for ref, hyp in zip(refs, hyps):
+			r_id, h_id = [], []
+			for sent in ref:
+				r_id.append(sent_id)
+				flat.append(sent)
+				sent_id += 1
+			for sent in hyp:
+				h_id.append(sent_id)
+				flat.append(sent)
+				sent_id += 1
+
+			r_ids.append(r_id)
+			h_ids.append(h_id)
+			
+
+		weights = []
+		pipe_out = self.pipe(flat)
+
+		for ref, hyp in zip(r_ids, h_ids):
+			rep_map = {}
+			r_w, h_w = [], []
+			for r in ref:
+				rep_map[r] = pipe_out[r][0][0]
+				r_w.append(float(len(pipe_out[r][0])))
+			for h in hyp:
+				rep_map[h] = pipe_out[h][0][0]
+				h_w.append(float(len(pipe_out[h][0])))
+
+			doc_dict = {
+				"0": ("ref", ref, r_w),
+				"1": ("hyp", hyp, h_w)
+			}
+
+			calc = WMD(rep_map, doc_dict, vocabulary_min=1)
+
+			try:
+				# dist = calc.nearest_neighbors("0", k=1, early_stop=1)[0][1]  # how far is hyp from ref?
+				res = calc.nearest_neighbors("0", k=1, early_stop=1)  # how far is hyp from ref?
+				dist = res[0][1]
+			except Exception as e:
+				ic(ref, hyp, res, e)
+
+			scores.append(np.exp(-dist)) # switch to similarity
+
+		return scores
+			
 		
 	def batch_compute(self, refs, hyps, batch_size):
 		scores = []
